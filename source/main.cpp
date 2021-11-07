@@ -1,53 +1,170 @@
-#define TESLA_INIT_IMPL // If you have more than one file using the tesla header, only define this in the main one
-#include <tesla.hpp>    // The Tesla Header
+#define TESLA_INIT_IMPL
+#include <tesla.hpp>
 
+
+TimeServiceType __nx_time_service_type = TimeServiceType_System; // so we can change the time
 
 class GuiTest : public tsl::Gui {
+
 public:
     GuiTest() { }
 
-    // Called when this Gui gets loaded to create the UI
-    // Allocate all elements on the heap. libtesla will make sure to clean them up when not needed anymore
-    virtual tsl::elm::Element* createUI() override {
-        // A OverlayFrame is the base element every overlay consists of. This will draw the default Title and Subtitle.
-        // If you need more information in the header or want to change it's look, use a HeaderOverlayFrame.
-        auto frame = new tsl::elm::OverlayFrame("Tesla Example", "v1.3.1");
+    tsl::elm::ListItem* currentTimeLabel = new tsl::elm::ListItem("Current Time");
+    int dayChange = 0;
+    int hourChange = 0;
+    int monthChange = 0;
+    bool keyHandled = false;
+    time_t timeToSet;
+    tsl::elm::OverlayFrame* frame;
 
-        // A list that can contain sub elements and handles scrolling
+    bool setNetworkSystemClock(time_t time) {
+        Result rs = timeSetCurrentTime(TimeType_NetworkSystemClock, (uint64_t)time);
+        if (R_FAILED(rs)) {
+            return false;
+        }
+        return true;
+    }
+    
+    virtual tsl::elm::Element* createUI() override {
+        frame = new tsl::elm::OverlayFrame("Time Control", "v1.0.0");
         auto list = new tsl::elm::List();
 
-        // Create and add a new list item to the list
-        list->addItem(new tsl::elm::ListItem("Default List Item"));
+        list->addItem(currentTimeLabel);
 
-        // Add the list to the frame for it to be drawn
-        frame->setContent(list);
+        list->addItem(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer* renderer, s32 x, s32 y, s32 w, s32 h) {
+            // blank space
+        }),
+        70);
+
+        list->addItem(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer* renderer, s32 x, s32 y, s32 w, s32 h) {
+            renderer->drawString(
+            "\uE0AC / \uE0AD  -  Change hour\n\n", false, x + 20, y + 20, 18, renderer->a(tsl::style::color::ColorDescription));
+        }),
+        32);
+
+        list->addItem(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer* renderer, s32 x, s32 y, s32 w, s32 h) {
+            renderer->drawString(
+            "\uE0AE / \uE0AB  -  Change day\n\n", false, x + 20, y + 20, 18, renderer->a(tsl::style::color::ColorDescription));
+        }),
+        32);
+
+        list->addItem(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer* renderer, s32 x, s32 y, s32 w, s32 h) {
+            renderer->drawString(
+            "\uE0E4 / \uE0E5  -  Change month\n\n", false, x + 20, y + 20, 18, renderer->a(tsl::style::color::ColorDescription));
+        }),
+        32);
+
+        list->addItem(new tsl::elm::CustomDrawer([](tsl::gfx::Renderer* renderer, s32 x, s32 y, s32 w, s32 h) {
+            renderer->drawString(
+            "\uE0E0          -  Update time", false, x + 20, y + 20, 18, renderer->a(tsl::style::color::ColorDescription));
+        }),
+        32);
         
-        // Return the frame to have it become the top level element of this Gui
+        frame->setContent(list);
+
         return frame;
     }
 
-    // Called once every frame to update values
     virtual void update() override {
+        
+        time_t currentTime;
+        Result rs = timeGetCurrentTime(TimeType_UserSystemClock, (u64*)&currentTime);
 
+        if(R_FAILED(rs)){
+            
+            currentTimeLabel->setText("Unable to get time");
+            // currentTimeLabel->setValue(format("0x%x", rs));
+        }
+        else
+        {
+            struct tm* p_tm_timeToSet = localtime(&currentTime);
+            p_tm_timeToSet->tm_mday += dayChange;
+            p_tm_timeToSet->tm_hour += hourChange;
+            p_tm_timeToSet->tm_mon += monthChange;
+            timeToSet = mktime(p_tm_timeToSet);
+            
+            char timeToSetStr[25];
+            strftime(timeToSetStr, sizeof timeToSetStr, "%a  %d/%m/%Y  %H:%M", p_tm_timeToSet);
+            currentTimeLabel->setText(timeToSetStr);
+        }
     }
 
-    // Called once every frame to handle inputs not handled by other UI elements
-    virtual bool handleInput(u64 keysDown, u64 keysHeld, touchPosition touchInput, JoystickPosition leftJoyStick, JoystickPosition rightJoyStick) override {
-        return false;   // Return true here to singal the inputs have been consumed
+   virtual bool handleInput(u64 keysDown, u64 keysHeld, const HidTouchState &touchPos, HidAnalogStickState leftJoyStick, HidAnalogStickState rightJoyStick) override{
+        
+       if(!this->keyHandled){
+           
+           if (keysDown & HidNpadButton_L) {
+                this->monthChange--;
+                this->keyHandled = true;
+            }
+
+            if (keysDown & HidNpadButton_R) {
+                this->monthChange++;
+                this->keyHandled = true;
+            }
+
+            if (keysDown & HidNpadButton_Left) {
+                this->dayChange--;
+                this->keyHandled = true;
+            }
+
+            if (keysDown & HidNpadButton_Right) {
+                this->dayChange++;
+                this->keyHandled = true;
+            }
+            
+            if (keysDown & HidNpadButton_Up) {
+                this->hourChange++;
+                this->keyHandled = true;
+            }
+
+            if (keysDown & HidNpadButton_Down) {
+                this->hourChange--;
+                this->keyHandled = true;
+            }
+
+            if(keysDown & HidNpadButton_A){
+                this->keyHandled = true;
+                Result rs = timeSetCurrentTime(TimeType_NetworkSystemClock, (uint64_t)timeToSet);
+
+                if(R_FAILED(rs)){
+                    // frame->setSubtitle(format("Unable to set time: 0x%x", rs));
+                } else
+                {    
+                    this->hourChange = 0;
+                    this->dayChange = 0;
+                    this->monthChange = 0;
+                }
+            }
+
+            return this->keyHandled;
+       }
+
+       if(keysDown == 0){
+           this->keyHandled = false;
+       }
+
+        return false;
     }
 };
 
 class OverlayTest : public tsl::Overlay {
 public:
-                                             // libtesla already initialized fs, hid, pl, pmdmnt, hid:sys and set:sys
-    virtual void initServices() override {}  // Called at the start to initialize all services necessary for this Overlay
-    virtual void exitServices() override {}  // Callet at the end to clean up all services previously initialized
+    virtual void initServices() override {
+        
+        timeInitialize();
 
-    virtual void onShow() override {}    // Called before overlay wants to change from invisible to visible state
-    virtual void onHide() override {}    // Called before overlay wants to change from visible to invisible state
+    }
+    
+    virtual void exitServices() override {
+        timeExit();
+    }
+
+    virtual void onShow() override {}
+    virtual void onHide() override {}
 
     virtual std::unique_ptr<tsl::Gui> loadInitialGui() override {
-        return initially<GuiTest>();  // Initial Gui to load. It's possible to pass arguments to it's constructor like this
+        return initially<GuiTest>();
     }
 };
 

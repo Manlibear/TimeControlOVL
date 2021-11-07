@@ -19,7 +19,7 @@
             "compilerPath": "C:/devkitPro/devkitA64/bin/aarch64-none-elf-g++",
             "cStandard": "c11",
             "cppStandard": "c++17",
-            "intelliSenseMode": "gcc-x64"
+            "intelliSenseMode": "windows-gcc-arm64"
         },
         {
             "name": "DKP Aarch64 Linux",
