@@ -26,5 +26,6 @@ Animal Crossing | Automatically updates time in game ![Time Control](media/ACNH.
 ## Credits
 * [libtestla](https://github.com/WerWolv/libtesla) by [WerWolv](https://github.com/WerWolv) as base for this overlay (and being super helpful on Discord)
 * [switch-time](https://github.com/3096/switch-time) by [3096]( https://github.com/3096) for inspiration
-* [ACNHMobileSpawner](https://github.com/berichan/ACNHMobileSpawner) for offsets for ACNH time info
+* [ACNHMobileSpawner](https://github.com/berichan/ACNHMobileSpawner) by [berichan](https://github.com/berichan/) for offsets for ACNH time info
+* [sys-botbase](https://github.com/olliz0r/sys-botbase) by [olliz0r](https://github.com/olliz0r) for a basis for memory shenanigans
 * [libnx](https://github.com/switchbrew/libnx) as base of almost all switch homebrew
