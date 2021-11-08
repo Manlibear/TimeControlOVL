@@ -21,7 +21,7 @@ A               | Update the time
 
 Game    | Feature
 --------|--------
-Animal Crossing | Automatically updates time in game ![Time Control](media/ACNH.gif)
+Animal Crossing | Automatically updates time in game ![Time Control](media/ACNH.gif) NOTE: Due to how ACNH handles time, after updating the time will be frozen. To rememdy this: Click 'Sync Time' in the overlay, close it, press minus to save and return to the menu, then re-open your save.
 
 ## Credits
 * [libtestla](https://github.com/WerWolv/libtesla) by [WerWolv](https://github.com/WerWolv) as base for this overlay (and being super helpful on Discord)

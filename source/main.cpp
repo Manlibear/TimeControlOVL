@@ -29,10 +29,12 @@ public:
     struct tm *p_tm_timeToSet;
     tsl::elm::OverlayFrame *frame;
     tsl::elm::ListItem *currentTimeLabel = new tsl::elm::ListItem("Current Time");
+    MetaData meta;
 
     virtual tsl::elm::Element *createUI() override
     {
-        frame = new tsl::elm::OverlayFrame("Time Control", "v1.1.0");
+        meta = getMetaData();
+        frame = new tsl::elm::OverlayFrame("Time Control", "v1.1.1");
 
         auto list = new tsl::elm::List();
 
@@ -45,6 +47,11 @@ public:
         list->addItem(drawStringLine("\uE0AE / \uE0AB  -  Change day\n\n"), 32);
         list->addItem(drawStringLine("\uE0E4 / \uE0E5  -  Change month\n\n"), 32);
         list->addItem(drawStringLine("\uE0E0          -  Update time"), 32);
+
+        if (meta.titleID == ACNH_TitleID)
+        {
+            list->addItem(drawStringLine("\uE0E3          -  Sync time"), 32);
+        }
 
         frame->setContent(list);
 
@@ -121,34 +128,39 @@ public:
                 this->keyHandled = true;
             }
 
+            if (keysDown & HidNpadButton_Y && meta.titleID == ACNH_TitleID)
+            {
+                u8 bUnFreeze[4]{96, 50, 32, 249};
+                poke(meta.main_nso_base + ACNH_TimeStateAddress, 4, bUnFreeze);
+            }
+
             if (keysDown & HidNpadButton_A)
             {
                 isError = false;
                 this->keyHandled = true;
                 timeSetCurrentTime(TimeType_NetworkSystemClock, (uint64_t)timeToSet);
+                timeSetCurrentTime(TimeType_LocalSystemClock, (uint64_t)timeToSet);
+                timeSetCurrentTime(TimeType_UserSystemClock, (uint64_t)timeToSet);
 
                 this->hourChange = 0;
                 this->dayChange = 0;
                 this->monthChange = 0;
 
-                MetaData meta = getMetaData();
-
                 if (meta.titleID == ACNH_TitleID)
                 {
                     u8 bFreeze[4]{31, 32, 3, 213};
-
                     int year = p_tm_timeToSet->tm_year + 1900;
                     u8 yearByteUpper = (year >> 8) & 0xFF;
                     u8 yearByteLower = year & 0xFF;
 
                     u8 bTime[6]{
                         yearByteLower, yearByteUpper,
-                        (u8)(p_tm_timeToSet->tm_mon + 1),
+                        (u8)(p_tm_timeToSet->tm_mon + 1), // month is zero based
                         (u8)p_tm_timeToSet->tm_mday,
                         (u8)p_tm_timeToSet->tm_hour,
                         (u8)p_tm_timeToSet->tm_min};
 
-                    poke(meta.heap_base + ACNH_TimeStateAddress, 4, bFreeze);
+                    poke(meta.main_nso_base + ACNH_TimeStateAddress, 4, bFreeze);
                     poke(meta.heap_base + ACNH_TimeAddress, 6, bTime);
                 }
             }
@@ -175,6 +187,7 @@ public:
 
         meta.heap_base = getHeapBase(debughandle);
         meta.titleID = getTitleId(pid);
+        meta.main_nso_base = getMainNsoBase(pid);
 
         detach();
 
@@ -225,6 +238,26 @@ public:
         return heap_base;
     }
 
+    u64 getMainNsoBase(u64 pid)
+    {
+        LoaderModuleInfo proc_modules[2];
+        s32 numModules = 0;
+        Result rc = ldrDmntGetProcessModuleInfo(pid, proc_modules, 2, &numModules);
+        if (R_FAILED(rc))
+            drawErrorSubtitle("ldrDmntGetProcessModuleInfo:" + std::to_string(rc));
+
+        LoaderModuleInfo *proc_module = 0;
+        if (numModules == 2)
+        {
+            proc_module = &proc_modules[1];
+        }
+        else
+        {
+            proc_module = &proc_modules[0];
+        }
+        return proc_module->base_address;
+    }
+
     u64 getTitleId(u64 pid)
     {
         u64 titleId = 0;
@@ -264,6 +297,7 @@ public:
         timeInitialize();
         pminfoInitialize();
         pmdmntInitialize();
+        ldrDmntInitialize();
     }
 
     virtual void exitServices() override
@@ -271,6 +305,7 @@ public:
         timeExit();
         pminfoExit();
         pmdmntExit();
+        ldrDmntExit();
     }
 
     virtual void onShow() override {}
