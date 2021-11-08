@@ -6,18 +6,33 @@ TimeServiceType __nx_time_service_type = TimeServiceType_System; // so we can ch
 class GuiTest : public tsl::Gui
 {
 
+    typedef struct
+    {
+        u64 main_nso_base;
+        u64 heap_base;
+        u64 titleID;
+        u8 buildID[0x20];
+    } MetaData;
+
 public:
     GuiTest() {}
+    bool isError = false;
 
+    const unsigned long ACNH_TimeAddress = 0x0BD29188;
+    const unsigned long ACNH_TimeStateAddress = 0x00328530;
+    const u64 ACNH_TitleID = 0x01006F8002326000;
+
+    Handle debughandle = 0;
     int dayChange = 0, hourChange = 0, monthChange = 0;
     bool keyHandled = false;
     time_t timeToSet;
+    struct tm *p_tm_timeToSet;
     tsl::elm::OverlayFrame *frame;
     tsl::elm::ListItem *currentTimeLabel = new tsl::elm::ListItem("Current Time");
 
     virtual tsl::elm::Element *createUI() override
     {
-        frame = new tsl::elm::OverlayFrame("Time Control", "v1.0.0");
+        frame = new tsl::elm::OverlayFrame("Time Control", "v1.1.0");
 
         auto list = new tsl::elm::List();
 
@@ -54,7 +69,7 @@ public:
         }
         else
         {
-            struct tm *p_tm_timeToSet = localtime(&currentTime);
+            p_tm_timeToSet = localtime(&currentTime);
             p_tm_timeToSet->tm_hour += hourChange;
             p_tm_timeToSet->tm_mday += dayChange;
             p_tm_timeToSet->tm_mon += monthChange;
@@ -108,18 +123,33 @@ public:
 
             if (keysDown & HidNpadButton_A)
             {
+                isError = false;
                 this->keyHandled = true;
-                Result rs = timeSetCurrentTime(TimeType_NetworkSystemClock, (uint64_t)timeToSet);
+                timeSetCurrentTime(TimeType_NetworkSystemClock, (uint64_t)timeToSet);
 
-                if (R_FAILED(rs))
+                this->hourChange = 0;
+                this->dayChange = 0;
+                this->monthChange = 0;
+
+                MetaData meta = getMetaData();
+
+                if (meta.titleID == ACNH_TitleID)
                 {
-                    // frame->setSubtitle(format("Unable to set time: 0x%x", rs));
-                }
-                else
-                {
-                    this->hourChange = 0;
-                    this->dayChange = 0;
-                    this->monthChange = 0;
+                    u8 bFreeze[4]{31, 32, 3, 213};
+
+                    int year = p_tm_timeToSet->tm_year + 1900;
+                    u8 yearByteUpper = (year >> 8) & 0xFF;
+                    u8 yearByteLower = year & 0xFF;
+
+                    u8 bTime[6]{
+                        yearByteLower, yearByteUpper,
+                        (u8)(p_tm_timeToSet->tm_mon + 1),
+                        (u8)p_tm_timeToSet->tm_mday,
+                        (u8)p_tm_timeToSet->tm_hour,
+                        (u8)p_tm_timeToSet->tm_min};
+
+                    poke(meta.heap_base + ACNH_TimeStateAddress, 4, bFreeze);
+                    poke(meta.heap_base + ACNH_TimeAddress, 6, bTime);
                 }
             }
 
@@ -133,6 +163,97 @@ public:
 
         return false;
     }
+
+    MetaData getMetaData()
+    {
+        MetaData meta;
+        attach();
+        u64 pid = 0;
+        Result rc = pmdmntGetApplicationProcessId(&pid);
+        if (R_FAILED(rc))
+            drawErrorSubtitle("pmdmntGetApplicationProcessId: " + std::to_string(rc));
+
+        meta.heap_base = getHeapBase(debughandle);
+        meta.titleID = getTitleId(pid);
+
+        detach();
+
+        return meta;
+    }
+
+    void poke(u64 offset, u64 size, u8 *val)
+    {
+        attach();
+        writeMem(offset, size, val);
+        detach();
+    }
+
+    void writeMem(u64 offset, u64 size, u8 *val)
+    {
+        Result rc = svcWriteDebugProcessMemory(debughandle, val, offset, size);
+        if (R_FAILED(rc))
+            drawErrorSubtitle("svcWriteDebugProcessMemory: " + std::to_string(rc));
+    }
+
+    void drawErrorSubtitle(std::string err)
+    {
+        if (!isError)
+        {
+            isError = true;
+            frame->setSubtitle(err);
+        }
+    }
+
+    u64 getHeapBase(Handle handle)
+    {
+        MemoryInfo meminfo;
+        memset(&meminfo, 0, sizeof(MemoryInfo));
+        u64 heap_base = 0;
+        u64 lastaddr = 0;
+        do
+        {
+            lastaddr = meminfo.addr;
+            u32 pageinfo;
+            svcQueryDebugProcessMemory(&meminfo, &pageinfo, handle, meminfo.addr + meminfo.size);
+            if ((meminfo.type & MemType_Heap) == MemType_Heap)
+            {
+                heap_base = meminfo.addr;
+                break;
+            }
+        } while (lastaddr < meminfo.addr + meminfo.size);
+
+        return heap_base;
+    }
+
+    u64 getTitleId(u64 pid)
+    {
+        u64 titleId = 0;
+        Result rc = pminfoGetProgramId(&titleId, pid);
+        if (R_FAILED(rc))
+            drawErrorSubtitle("pminfoGetProgramId: " + std::to_string(rc));
+        return titleId;
+    }
+
+    void attach()
+    {
+        u64 pid = 0;
+        Result rc = pmdmntGetApplicationProcessId(&pid);
+        if (R_FAILED(rc))
+            drawErrorSubtitle("pmdmntGetApplicationProcessId: " + std::to_string(rc));
+
+        if (debughandle != 0)
+            svcCloseHandle(debughandle);
+
+        rc = svcDebugActiveProcess(&debughandle, pid);
+        if (R_FAILED(rc))
+            drawErrorSubtitle("svcDebugActiveProcess: " + std::to_string(rc));
+    }
+
+    void detach()
+    {
+        if (debughandle != 0)
+            svcCloseHandle(debughandle);
+    }
 };
 
 class OverlayTest : public tsl::Overlay
@@ -141,11 +262,15 @@ public:
     virtual void initServices() override
     {
         timeInitialize();
+        pminfoInitialize();
+        pmdmntInitialize();
     }
 
     virtual void exitServices() override
     {
         timeExit();
+        pminfoExit();
+        pmdmntExit();
     }
 
     virtual void onShow() override {}

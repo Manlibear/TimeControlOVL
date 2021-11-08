@@ -17,6 +17,12 @@ A               | Update the time
 ## Screenshot
 ![Time Control](media/screenshot.jpg)
 
+## Game Specific Features
+
+Game    | Feature
+--------|--------
+Animal Crossing | Automatically updates time in game ![Time Control](media/ACNH.gif)
+
 ## Credits
 * [libtestla](https://github.com/WerWolv/libtesla) by [WerWolv](https://github.com/WerWolv) as base for this overlay (and being super helpful on Discord)
 * [libnx](https://github.com/switchbrew/libnx) as base of almost all switch homebrew

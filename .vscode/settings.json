@@ -1,5 +1,10 @@
 {
     "files.associations": {
+        "*.map": "cpp",
+        "*.objs": "cpp",
+        "*.wrps": "cpp",
+        "*.evnts": "cpp",
+        "*.npcs": "cpp",
         "chrono": "cpp",
         "string_view": "cpp",
         "array": "cpp",
@@ -52,6 +57,13 @@
         "codecvt": "cpp",
         "condition_variable": "cpp",
         "iomanip": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp"
     }
 }
